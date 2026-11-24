@@ -31,7 +31,8 @@ def main(argv=None) -> int:
     logging.basicConfig(level=logging.INFO if args.verbose else logging.WARNING,
                         format="%(levelname)s %(name)s: %(message)s")
     load_dotenv(ROOT / ".env")
-    cfg = tomllib.loads(args.config.read_text(encoding="utf-8"))
+    # utf-8-sig: Windows editors (Notepad, PowerShell 5) may save with a BOM that tomllib rejects
+    cfg = tomllib.loads(args.config.read_text(encoding="utf-8-sig"))
     store = Store(args.db)
     router = None if args.no_llm else Router(cfg["llm"], store)
 
