@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write            # to commit the new digest back to the repo
+  pages: write               # to publish the dashboard
+  id-token: write            # required by deploy-pages
 
 concurrency:
   group: daily-digest
@@ -45,3 +47,20 @@ jobs:
           git add out data
           git diff --cached --quiet || git commit -m "digest: $(date -u +%F)"
           git push
+
+      - name: Build dashboard
+        run: python -m digest.site
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: digest
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
+    steps:
+      - id: pages
+        uses: actions/deploy-pages@v4
