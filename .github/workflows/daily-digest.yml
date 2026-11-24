@@ -7,7 +7,6 @@ on:
 
 permissions:
   contents: write            # to commit the new digest back to the repo
-  models: read               # lets the built-in token call GitHub Models (backup LLM)
 
 concurrency:
   group: daily-digest
