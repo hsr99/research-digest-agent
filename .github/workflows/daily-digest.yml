@@ -1,8 +1,9 @@
 name: daily-digest
 
 on:
-  schedule:
-    - cron: "30 13 * * *"   # 13:30 UTC = 19:00 IST, every evening
+  # schedule is paused; uncomment to run every evening at 19:00 IST (13:30 UTC)
+  # schedule:
+  #   - cron: "30 13 * * *"
   workflow_dispatch: {}      # "Run workflow" button for manual runs
 
 permissions:
