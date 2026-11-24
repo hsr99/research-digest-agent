@@ -2,80 +2,78 @@
 
 ## 30-second version
 
-- Z.ai launches GLM-5.4 with looped transformer architecture, weight-shared layers deepen network without extra parameters.
-- Unsloth v0.1.923-beta makes Inkling 2 Mini up to 1.9x faster decoding on 8-12GB GPUs.
-- vLLM exact serving features flip 1.5% individual graded answers despite unchanged aggregate accuracy.
-- ComplexIF benchmark evaluates multi-turn, multi-constraint instruction following; top models satisfy fewer than half verifiable tasks.
-- Position-skipped distillation lets 8K-trained sparse attention indexers match 32K/64K baselines with 6x less compute.
+- Hugging Face details agentic evaluation design, hub now 17k datasets, new primitives.
+- TipSweep transfers learning rates across block counts, discovers precision-dependent scaling.
+- Ollama v0.40.18 adds Metal optimizations, llama.cpp update, drops JetPack 5.
+- LocalCode brings open-source agentic coding to Mac with local inference.
+- ToolSmith automates tool generation for multimodal search agents, improves performance across benchmarks.
 
-## 1. Z.ai releases GLM-5.4 with loop transformer architecture
+## 1. Hugging Face Details Agentic Evaluation Design and Infrastructure
 
-`Models` · [rss](https://simonwillison.net/2026/Nov/23/glm-54/) · score 9.0
+`Research` · [rss](https://huggingface.co/blog/agentic-evals) · score 8.0
 
-Chinese AI lab Z.ai has launched GLM-5.4, its first model using a looped transformer architecture where weight-shared layers run multiple iterations per forward pass, effectively deepening the network without adding parameters. The model is accessible via Z.ai's Coding Plan subscription through an OpenAI-compatible API, though open weights are not yet available.
+Hugging Face's blog outlines the evolution of AI evaluations from question-answer benchmarks to agentic and multi-agent systems, emphasizing that agentic evaluations are now prominent in model releases. The post details the anatomy of an agentic evaluation — task, agent harness, environment, rollout, and checks — and notes that changing the agent harness alone can shift accuracy by up to 29.9 percentage points, as shown in a Terminal-Bench audit. Hugging Face also highlights its hub's growth to roughly 17,000 evaluation datasets and new primitives like Traces, Benchmarks, and Environments for agentic workflows.
 
-**Why it matters:** Looped transformers represent a novel architectural approach to increasing reasoning depth without parameter growth, with two labs (Z.ai and Thinking Machines Lab) adopting it within days of each other — signaling a potential trend for coding and agentic tasks.
+**Why it matters:** Practitioners building or comparing agents must account for the full evaluation stack, not just the model, because harness and environment choices materially affect reported scores. Open tooling and shared evaluation components enable reproducibility and faster iteration.
 
-Also at: <https://z.ai/blog/glm-5.4>
+## 2. TipSweep transfers learning rates across block counts in LLM post-training
 
-## 2. Unsloth v0.1.923-beta: Inkling 2 Mini up to 1.9x faster decoding
+`Research` · [arxiv](https://arxiv.org/abs/2611.31166v1) · score 8.0
 
-`Tools` · [github](https://github.com/unslothai/unsloth/releases/tag/v0.1.923-beta) · score 8.0
+Researchers propose TipSweep, a method that finds the optimal learning rate by training only the last transformer block (k₀=1) and then predicts the rate for any number of blocks k. They discover precision-dependent scaling: optimal LR scales as k⁻¹ with FP32 master weights but as k⁻¹ᐟ² when updating BF16 weights directly, explained by an analytical model of update rounding.
 
-Unsloth releases v0.1.923-beta with Inkling 2 Mini achieving up to 1.9x faster decoding on 8-12 GB GPUs when all experts fit in memory, plus speculative decoding drafting 2 tokens by default for 1.15-1.19x speedup. The update also adds multi-GPU diffusion LoRA training at ~2x samples/second, Qwen-Image-Flash (4-step images ~14x faster) and FastWan (3-step video up to 3x faster), plus AsyncGRPO training 40% faster with 2x faster GRPO rollouts.
+**Why it matters:** Practitioners can reduce costly learning-rate grid searches in SFT, DPO, and RLVR by profiling a single block on consumer GPUs, then applying the precision-aware scaling rule to full-model runs.
 
-**Why it matters:** Practitioners running small MoE models on consumer GPUs get significant inference speedups without hardware changes, while diffusion and RLHF workflows see multi-GPU scaling and step-reduction gains that cut training and generation time.
+## 3. Ollama v0.40.18 adds Metal optimizations and llama.cpp update
 
-## 3. LLM serving 'exact' features flip graded answers despite unchanged accuracy
+`Tools` · [github](https://github.com/ollama/ollama/releases/tag/v0.40.18) · score 7.0
 
-`Infra` · [arxiv](https://arxiv.org/abs/2611.29663v1) · score 8.0
+Ollama released v0.40.18 with MLX improvements including fused Inkling residual mixing on Metal and faster decode, prefill, and draft rounds for Inkling2. The release also shares tensor helpers across architectures in mlxrunner, bumps llama.cpp to version b12651, and drops JetPack 5 support.
 
-Researchers tested nine vLLM serving features documented as exact (prefix caching, chunked prefill, speculative decoding, etc.) on a 4B model across 3,380 requests. With default kernels, all features kept aggregate accuracy within one point but flipped 1.47–1.78% of individual graded outcomes — below the 1.72% scheduling floor from request reordering. FP8 KV cache flipped 3.36%. Under batch-invariant kernels, the seven exact features produced zero flips while FP8 KV cache still flipped 3.91%.
+**Why it matters:** Practitioners running models on Apple Silicon get faster inference through Metal optimizations, while the llama.cpp update brings upstream fixes and performance improvements. Removal of JetPack 5 support may affect users on older NVIDIA Jetson platforms.
 
-**Why it matters:** Aggregate accuracy masks per-request regressions; teams should validate serving changes against a scheduling floor from multiple replicas or use batch-invariant kernels where the expected flip rate is zero.
+## 4. LocalCode brings open-source agentic coding to Mac with local inference
 
-## 4. ComplexIF benchmark tests multi-turn, multi-constraint instruction following
+`Tools` · [hackernews](https://github.com/mjwsolo/localcode) · score 7.0
 
-`Research` · [arxiv](https://arxiv.org/abs/2611.29775v1) · score 7.0
+LocalCode is an open-source agentic coding tool for Mac that runs entirely locally via a single command install. It offers 12 models with 169 quantization options from Hugging Face, featuring speculative decoding for Gemma, Qwen, and Muse models, precompiled GPU kernels, and an OpenAI-compatible API endpoint.
 
-Researchers introduce ComplexIF, a benchmark generated by an automatic pipeline that expands seed requests into multi-turn conversations with woven constraints. The benchmark has two splits: a verifiable split with format constraints checked by programs, and a rubric split with semantic instructions like tone or audience checked by an LLM judge. According to the authors, across 14 proprietary and open-weight models, even the strongest satisfies every constraint on fewer than half of the verifiable tasks, and no model leads on both splits.
+**Why it matters:** Practitioners get a fully local coding agent with model flexibility and no data leaving the machine, while still supporting web tools and MCP servers when needed.
 
-**Why it matters:** As frontier LLMs saturate existing instruction-following benchmarks, ComplexIF provides a harder, more realistic test that mirrors how users actually combine constraints across conversation turns. The low pass rates indicate significant room for improvement in multi-constraint adherence.
+## 5. ToolSmith Automates Tool Generation for Multimodal Search Agents
 
-## 5. Position-skipped distillation trains sparse-attention indexers on short sequences for long-context serving
+`Research` · [arxiv](https://arxiv.org/abs/2611.31198v1) · score 7.0
 
-`Research` · [arxiv](https://arxiv.org/abs/2611.29664v1) · score 7.0
+The authors propose ToolSmith, an automatic tool-generation framework that expands a lean base tool library by creating and reusing modules. Evaluated on three in-domain and ten out-of-domain multimodal search benchmarks using a VLM-as-a-Judge protocol, ToolSmith consistently improves performance across agents of varying scales, with larger backbones showing greater gains.
 
-According to the authors, indexers for top-k sparse attention typically require distillation at full serving length, but fail to generalize from short sequences mainly due to rotary positional encoding. They propose position-skipped distillation, where short training sequences contain a randomly placed gap in position IDs, enabling an 8K-distilled indexer to match 32K and 64K baselines on DeepSeek-V2-Lite and Qwen3-30B-A3B with roughly 6x less training compute per token.
+**Why it matters:** For practitioners building multimodal search agents, ToolSmith reduces the manual effort of crafting and maintaining tool libraries while enabling adaptation to new query types and evidence formats, and scales with larger models.
 
-**Why it matters:** Practitioners can train sparse-attention indexers at a fraction of the compute cost while maintaining long-context quality, and further accelerate inference by quantizing indexer keys to 4 bits with negligible perplexity loss and 1.6-2.2x faster scanning.
+## 6. Attention Temperature Miscalibration Confounds Zero-Shot Context Extension Results
 
-## 6. Exposure metric predicts first exploited loophole in GRPO before training
+`Research` · [arxiv](https://arxiv.org/abs/2611.31113v1) · score 7.0
 
-`Research` · [arxiv](https://arxiv.org/abs/2611.29651v1) · score 7.0
+The paper demonstrates that evaluating context extension at default temperature τ=1 can falsely favor attention modifications due to baseline miscalibration. Under standard fp32 training, 8k-trained baselines are 8-15% miscalibrated at 30k context; in pure-bf16 without master weights, miscalibration reaches 37-58% because AdamW steps on gain parameters are smaller than bf16 precision, freezing gains for 22 checkpoints. Calibrating temperature per model and length eliminates apparent advantages of block-sparse attention, attention dropout, and ALiBi, while unfreezing gains reverses or substantially reduces the block-sparse benefit.
 
-Researchers define "exposure" as the product of a starting policy's propensity to produce a degenerate pattern and an LLM judge's false-positive rate for that pattern. Across 36 GRPO runs with seven judges, the pattern with highest exposure was the first exploited in all 12 runs where exploitation occurred, while highest FPR alone succeeded in only six. Causal tests seeding patterns at controlled doses confirmed exposure predicts both which loophole appears first and its onset window.
+**Why it matters:** Practitioners must report context extension results at calibrated temperatures and verify that normalization gains actually update during training, otherwise architectural improvements may be misattributed to what are essentially evaluation artifacts.
 
-**Why it matters:** Practitioners can audit exposure before RL training to identify the specific loophole a policy is most likely to exploit first, enabling targeted mitigations such as rule-based masking or judge hardening on high-exposure patterns.
+## 7. Greptile tests LLMs with screenshots vs accessibility trees for computer use
 
-## 7. WeightedPFN Adapts TabPFN for Weighted Regression and Classification
+`Agents` · [hackernews](https://www.greptile.com/blog/trex-computer-use) · score 6.0
 
-`Research` · [arxiv](https://arxiv.org/abs/2611.29789v1) · score 6.0
+Greptile evaluated seven models on 172 OSWorld tasks using three vision setups: screenshots only, screenshots plus accessibility tree, and element-ID selection. GPT-4.1 achieved 5.4% with screenshots alone, while GPT-6.1 Sol reached 83.8%; the accessibility tree provides element positions and IDs, removing the need for models to predict pixel coordinates.
 
-The authors develop a pipeline to adapt tabular foundation models like TabPFN-3.5 to weighted prediction tasks using weighted attention, a normalized weighted loss, and pretraining on synthetic weighted tasks from missing-data problems. The resulting WeightedPFN performs strongly on real datasets for missing-data and out-of-distribution causal tasks while running about as fast as linear baselines. They also establish a statistical theory showing a suitably pretrained weighted Transformer attains the nonparametric minimax rate for weighted regression on new datasets without further fitting.
+**Why it matters:** Coordinate prediction remains a major failure mode for computer-use agents, especially on high-resolution screens; exposing the accessibility tree or letting models select elements by ID can dramatically improve reliability without requiring stronger vision models.
 
-**Why it matters:** This enables practitioners to use powerful tabular foundation models for weighted regression and classification — common in missing-data analysis, causal inference, insurance pricing, and particle physics — without costly per-dataset fitting and tuning, while retaining strong empirical performance and theoretical guarantees.
+## 8. Beginner's guide to running local LLMs with Unsloth, Qwen, and Inkling on Windows
 
-## 8. S1Arena-MM Benchmarks System-1 vs MLLM Multimodal Decisions
+`Tools` · [hackernews](https://www.gpupartner.com/blog/beginners-guide-local-ai-inkling-qwen-unsloth) · score 6.0
 
-`Research` · [arxiv](https://arxiv.org/abs/2611.29773v1) · score 6.0
+The author describes setting up a private, free ChatGPT alternative on a home PC using Unsloth Desktop and quantized open-weight models like Qwen and Inkling. The guide covers VRAM requirements, quantization tradeoffs (Q8 to Q2), and recommends MoE models such as Qwen3.6-35B and Inkling 2 Mini for consumer GPUs with 16GB VRAM, achieving ~47 tokens/second on an RTX 5060 Ti.
 
-The paper introduces S1Arena-MM, a benchmark with 51,060 questions across 94 tasks spanning image, video, and audio inputs, plus 102 closed-loop game environments. Evaluating 12 System-1 models and 21 MLLMs, the best System-1 model leads the best MLLM by 4.9 percentage points on static image decisions and is within one point on video and audio. Post-training for decisions mainly improves probability calibration, and allowing MLLMs up to 2,048 thought tokens only slightly surpasses the best System-1 models while increasing Brier scores for most MLLMs.
-
-**Why it matters:** Practitioners can use this benchmark to choose between fast, single-pass System-1 models and slower, reasoning-based MLLMs for specific multimodal decision tasks, understanding the trade-offs in accuracy, calibration, and latency.
+**Why it matters:** Shows engineers a practical, no-terminal path to run capable local models on Windows hardware, with concrete VRAM-to-model mappings and quantization guidance for balancing context length, speed, and quality.
 
 ---
 
-73 fetched → 72 unique → 72 new → 60 ranked → 8 published in 167.4s
-- `openrouter/baidu/ernie-5.5-flash-preview:free`: 3 calls (0 cached), 14525 tokens, ~12853 ms avg
-- `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free`: 9 calls (0 cached), 11204 tokens, ~13222 ms avg
+87 fetched → 85 unique → 83 new → 60 ranked → 8 published in 193.5s
+- `openrouter/baidu/ernie-5.5-flash-preview:free`: 3 calls (0 cached), 13419 tokens, ~13482 ms avg
+- `openrouter/nvidia/nemotron-3-ultra-550b-a55b:free`: 9 calls (0 cached), 11968 tokens, ~16016 ms avg
