@@ -224,3 +224,7 @@ __marimo__/
 
 # --- research digest agent ---
 out/*-nollm.*
+
+# built by `python -m digest.site`, deployed by the workflow
+site/
+.claude/
