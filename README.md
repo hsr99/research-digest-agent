@@ -1,0 +1,71 @@
+# Research Digest Agent
+
+A daily AI news digest built entirely on **free LLM APIs**. It pulls from arXiv, Hacker News,
+GitHub releases and lab/engineering blogs, merges duplicates, ranks everything with a cheap
+model, and has the best available free model write a short, cited, source-faithful summary of
+the top stories. It runs every evening on GitHub Actions and costs **$0/month**.
+
+```mermaid
+flowchart LR
+    A[arXiv] --> F
+    H[Hacker News] --> F
+    G[GitHub releases] --> F
+    R[RSS: labs & blogs] --> F
+    F[Fetch] --> D[Dedupe<br/>URL + title]
+    D --> S[Skip already<br/>published]
+    S --> K[Rank<br/>cheap model, batched]
+    K --> P[Select top N<br/>per-source cap]
+    P --> E[Enrich<br/>fetch article text]
+    E --> W[Write<br/>best free model]
+    W --> O[JSON + Markdown]
+    K -.-> RT
+    W -.-> RT
+    RT[LLM router<br/>failover · retries · cache · metrics]
+```
+
+## Why it's built this way
+
+| Decision | Reason |
+|---|---|
+| **Provider-agnostic router** (`digest/llm.py`) | Gemini, Groq, OpenRouter and Ollama all speak the OpenAI chat format. Each role has an ordered list of models; on a 429 the router backs off, then fails over to the next provider. Free-tier rate limits become a non-issue. |
+| **Two model roles** | Ranking 60 candidates is high volume and low stakes, so it goes to a small, fast model. Writing 8 summaries is low volume and high stakes, so it goes to the best free model. |
+| **Validated JSON output** | Every reply is parsed and checked against the expected shape. On a bad reply the model gets one chance to fix it, then the next provider takes over. Small free models break JSON often; this makes them usable. |
+| **SQLite response cache** | Identical requests are never paid for twice, so reruns and eval experiments are free. |
+| **Per-call metrics** | Every call logs provider, model, tokens, latency and errors, which shows up in each digest's footer. |
+| **"Seen" store** | Stories published once never reappear, even when arXiv or HN resurface them. |
+| **Faithfulness rules in the writer prompt** | The writer may only use the source text and must attribute vendor claims ("Z.ai says…") instead of stating them as fact. |
+| **Per-source isolation** | A dead feed is logged and skipped; it can't take down the run. |
+
+## Quick start
+
+```powershell
+pip install -r requirements.txt
+copy .env.example .env      # then add at least one free API key
+python -m digest            # writes out/YYYY-MM-DD.md and .json
+```
+
+No key yet? `python -m digest --no-llm` runs the whole pipeline with heuristic ranking and no summaries.
+
+Options: `--hours 48` widens the lookback window, `-v` shows what the router is doing.
+Everything else (topic, sources, models and their order) lives in [`config.toml`](config.toml).
+
+## Run it daily on GitHub
+
+1. Push this folder to a GitHub repo.
+2. Settings → Secrets and variables → Actions: add `GEMINI_API_KEY` and/or `GROQ_API_KEY`, `OPENROUTER_API_KEY`.
+3. The workflow in `.github/workflows/daily-digest.yml` runs every evening at 19:00 IST (or press **Run workflow**), runs the tests, builds the digest and commits it.
+
+## Tests
+
+```powershell
+python -m pytest -q
+```
+
+The router tests use a fake HTTP transport, so they cover failover, retries, JSON repair and caching without network access or keys.
+
+## Roadmap
+
+- [ ] **Digest Arena:** compare this pipeline against a curated AI digest on coverage, precision, faithfulness (LLM-as-judge), source diversity and freshness
+- [ ] Embedding-based dedupe (same story, different titles)
+- [ ] Static web page reading `out/latest.json` on GitHub Pages
+- [ ] Email / Slack delivery
