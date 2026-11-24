@@ -64,7 +64,7 @@ def fetch_arxiv(client: httpx.Client, cfg: dict, since: datetime) -> list[Item]:
 
 
 # ---------------------------------------------------------------- Hacker News
-def _keyword_regex(keywords: list[str]) -> re.Pattern:
+def keyword_regex(keywords: list[str]) -> re.Pattern:
     parts = []
     for kw in keywords:
         p = r"\b" + re.escape(kw)
@@ -82,7 +82,7 @@ def fetch_hackernews(client: httpx.Client, cfg: dict, since: datetime) -> list[I
         "hitsPerPage": 200,
     }
     hits = client.get(url, params=params).json().get("hits", [])
-    kw = _keyword_regex(cfg["keywords"])
+    kw = keyword_regex(cfg["keywords"])
     items = []
     for h in hits:
         title = h.get("title") or ""

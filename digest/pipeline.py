@@ -13,7 +13,7 @@ from . import prompts
 from .dedupe import dedupe, normalize_url
 from .llm import AllProvidersFailed, InvalidOutput, Router
 from .models import Item, Story
-from .sources import USER_AGENT, clean_text, fetch_all
+from .sources import USER_AGENT, clean_text, fetch_all, keyword_regex
 from .store import Store
 
 log = logging.getLogger(__name__)
@@ -68,13 +68,31 @@ def rank_llm(items: list[Item], router: Router, topic: str) -> None:
             it.score, it.tag, it.reason = scores.get(start + k, (0.0, "", "not scored"))
 
 
-def rank_heuristic(items: list[Item]) -> None:
-    """No-LLM fallback so the pipeline can run (and be tested) without any API key."""
-    base = {"rss": 6.0, "github": 5.5, "hackernews": 4.0, "arxiv": 4.0}
+SOURCE_BASE = {"rss": 6.0, "github": 5.5, "hackernews": 4.0, "arxiv": 4.0}
+
+
+def rank_heuristic(items: list[Item], fallback_cfg: dict) -> None:
+    """No-LLM ranking: used when every LLM is down, and by --no-llm runs.
+
+    score = source base           hand-picked feeds > firehoses (HN, arXiv)
+          + popularity            log10(HN points), capped at +3
+          + duplicate bonus       +0.5 per extra source carrying the story
+          + topic relevance       topic keywords in the title (+1 each) or text (+0.5), cap +2.5
+          - off-topic penalty     -3 if the title matches funding/drama/opinion words
+    """
+    relevant = keyword_regex(fallback_cfg["relevant"])
+    off_topic = keyword_regex(fallback_cfg["off_topic"])
     for it in items:
         pts = it.signals.get("points", 0)
-        it.score = base.get(it.source, 4.0) + min(3.0, math.log10(pts + 1)) + 0.5 * len(it.also_seen_at)
-        it.tag, it.reason = "", "heuristic"
+        in_title = {m.group(0).lower() for m in relevant.finditer(it.title)}
+        in_text = {m.group(0).lower() for m in relevant.finditer(it.text[:600])} - in_title
+        relevance = min(2.5, len(in_title) + 0.5 * len(in_text))
+        penalty = 3.0 if off_topic.search(it.title) else 0.0
+        it.score = round(SOURCE_BASE.get(it.source, 4.0) + min(3.0, math.log10(pts + 1))
+                         + 0.5 * len(it.also_seen_at) + relevance - penalty, 2)
+        it.tag = ""
+        it.reason = f"keywords: {', '.join(sorted(in_title | in_text)) or 'none'}" + \
+                    (" | off-topic penalty" if penalty else "")
 
 
 def select(items: list[Item], max_items: int, min_score: float = 5.0,
@@ -200,10 +218,17 @@ def run(cfg: dict, store: Store, router: Router | None, use_llm: bool = True,
     log.info("fetched %d, unique %d, unseen %d, candidates %d",
              len(raw), len(unique), len(fresh), len(candidates))
 
+    ranking = "llm" if use_llm else "keywords"
     if use_llm:
-        rank_llm(candidates, router, topic["description"])
-    else:
-        rank_heuristic(candidates)
+        try:
+            rank_llm(candidates, router, topic["description"])
+        except AllProvidersFailed as e:
+            # all-or-nothing: LLM scores (relevance 0-10) and keyword scores (popularity-based)
+            # aren't on the same scale, so if any batch fails, re-rank everything without the LLM
+            log.error("every rank model failed, falling back to keyword ranking: %s", e)
+            ranking = "keywords (LLMs unavailable)"
+    if ranking != "llm":
+        rank_heuristic(candidates, cfg["fallback"])
     # pick extra, then drop stories with no readable source text (e.g. tweets): a writer
     # with nothing to read can only make things up
     n = topic["max_items"]
@@ -214,31 +239,39 @@ def run(cfg: dict, store: Store, router: Router | None, use_llm: bool = True,
     log.info("skipped %d stories with no readable source text",
              sum(len(it.text) < MIN_SOURCE_CHARS for it in pool))
 
-    stories, failed = [], []
+    # writing: once the whole write chain has failed, stop calling it (it's down) and use
+    # the source's own first sentences for the remaining stories instead of dropping them
+    stories, plain_count = [], 0
+    write_up = use_llm
     for it in picked:
-        if not use_llm:
-            stories.append(plain_story(it))
-            continue
-        try:
-            stories.append(write_story(it, router))
-        except AllProvidersFailed as e:
-            log.error("could not write '%s': %s", it.title, e)
-            failed.append(it.url)
-    summary_lines = tldr(stories, router) if (use_llm and stories) else [s.headline for s in stories[:5]]
+        if write_up:
+            try:
+                stories.append(write_story(it, router))
+                continue
+            except AllProvidersFailed as e:
+                log.error("every write model failed, using source text from here on: %s", e)
+                write_up = False
+        stories.append(plain_story(it))
+        plain_count += 1
+    summary_lines = (tldr(stories, router) if write_up and stories
+                     else [s.headline for s in stories[:5]])
 
     date = started.strftime("%Y-%m-%d")
-    if use_llm:  # heuristic test runs shouldn't hide stories from tomorrow's real digest
-        store.mark_seen([normalize_url(it.url) for it in picked if it.url not in failed], date)
+    if use_llm:  # --no-llm test runs shouldn't hide stories from tomorrow's real digest
+        store.mark_seen([normalize_url(it.url) for it in picked], date)
     return {
         "date": date,
         "generated_at": started.isoformat(timespec="seconds"),
+        "ranking": ranking,
+        "degraded": use_llm and (ranking != "llm" or plain_count > 0),
         "tldr": summary_lines,
         "stories": [s.__dict__ for s in stories],
         "candidates": [c.to_dict() for c in sorted(candidates, key=lambda x: -(x.score or 0))],
         "stats": {
             "sources": source_stats,
             "fetched": len(raw), "unique": len(unique), "unseen": len(fresh),
-            "candidates": len(candidates), "published": len(stories), "write_failures": len(failed),
+            "candidates": len(candidates), "published": len(stories),
+            "written_without_llm": plain_count,
             "llm": store.run_summary() if use_llm else None,
             "seconds": round((datetime.now(timezone.utc) - started).total_seconds(), 1),
         },

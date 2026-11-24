@@ -10,6 +10,15 @@ lookback_hours = 48     # overlap on purpose: the "seen" store stops repeats, an
 max_items = 8           # stories in the final digest
 max_candidates = 60     # stories sent to the LLM ranker after dedupe
 
+# Keyword ranking, used when every LLM is down (and by --no-llm test runs).
+[fallback]
+relevant = ["LLM", "language model", "transformer", "inference", "serving", "agent", "agentic",
+            "eval", "benchmark", "fine-tun", "RLHF", "GRPO", "distill", "quantiz", "attention",
+            "RAG", "retrieval", "embedding", "open-source", "open weights", "vLLM",
+            "MCP", "tool use", "reasoning", "multimodal", "diffusion", "GPU", "kernel", "training"]
+off_topic = ["funding", "raises", "valuation", "IPO", "stock", "lawsuit", "sues", "layoffs",
+             "hyping", "hype", "drama", "slams", "reportedly", "rumor", "CEO says", "jobs"]
+
 [sources.arxiv]
 categories = ["cs.AI", "cs.CL", "cs.LG"]
 max_results = 60

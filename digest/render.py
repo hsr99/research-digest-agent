@@ -3,6 +3,11 @@ from __future__ import annotations
 
 def to_markdown(digest: dict) -> str:
     lines = [f"# AI Digest: {digest['date']}", ""]
+    if digest.get("degraded"):
+        n = digest["stats"].get("written_without_llm", 0)
+        lines += [f"> **Reduced edition:** the AI models were unavailable today. Ranking: "
+                  f"{digest['ranking']}; {n} of {len(digest['stories'])} stories use the source's "
+                  f"own text instead of an AI summary.", ""]
     if digest["tldr"]:
         lines += ["## 30-second version", ""] + [f"- {l}" for l in digest["tldr"]] + [""]
     for i, s in enumerate(digest["stories"], 1):

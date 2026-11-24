@@ -35,6 +35,7 @@ flowchart LR
 | **Per-call metrics** | Every call logs provider, model, tokens, latency and errors, which shows up in each digest's footer. |
 | **"Seen" store** | Stories published once never reappear, even when arXiv or HN resurface them. |
 | **Faithfulness rules in the writer prompt** | The writer may only use the source text and must attribute vendor claims ("Z.ai says…") instead of stating them as fact. |
+| **Degrades instead of failing** | If every model fails during ranking, everything is re-ranked with a keyword formula (source, HN points, topic keywords, off-topic penalty). If writing fails, stories use the source's own text. The digest is marked as a reduced edition, but a day is never missed. |
 | **Per-source isolation** | A dead feed is logged and skipped; it can't take down the run. |
 
 ## Quick start
