@@ -4,14 +4,15 @@ import json
 import httpx
 import pytest
 
-from digest.llm import AllProvidersFailed, InvalidOutput, Router, extract_json
+from digest.llm import (AllProvidersFailed, InvalidOutput, PaidModelConfigured, Router,
+                        check_free_only, extract_json)
 from digest.store import Store
 
 CFG = {
     "providers": {
-        "a": {"base_url": "https://a.test/v1", "key_env": "A_KEY"},
-        "b": {"base_url": "https://b.test/v1", "key_env": "B_KEY"},
-        "nokey": {"base_url": "https://n.test/v1", "key_env": "MISSING_KEY"},
+        "a": {"base_url": "https://a.test/v1", "key_env": "A_KEY", "free": True},
+        "b": {"base_url": "https://b.test/v1", "key_env": "B_KEY", "free": True},
+        "nokey": {"base_url": "https://n.test/v1", "key_env": "MISSING_KEY", "free": True},
     },
     "roles": {"write": [{"provider": "nokey", "model": "m0"},
                         {"provider": "a", "model": "m1"},
@@ -128,3 +129,25 @@ def test_non_api_200_body_fails_over_instead_of_crashing(env):
 def test_all_failing_raises_with_every_error(env):
     with pytest.raises(AllProvidersFailed, match="a/m1.*b/m2"):
         router(env, lambda r: reply("", 400)).complete_json("write", "s", "u")
+
+
+def test_real_config_passes_the_free_only_guard():
+    import tomllib
+    from pathlib import Path
+    cfg = tomllib.loads((Path(__file__).parent.parent / "config.toml").read_text(encoding="utf-8"))
+    check_free_only(cfg["llm"])  # must not raise
+
+
+def test_guard_rejects_provider_not_marked_free(env):
+    cfg = {"providers": {"paid": {"base_url": "https://p.test", "key_env": "A_KEY"}},
+           "roles": {"write": [{"provider": "paid", "model": "big"}]}}
+    with pytest.raises(PaidModelConfigured, match="not marked free"):
+        Router(cfg, env)
+
+
+def test_guard_rejects_openrouter_model_without_free_suffix():
+    cfg = {"providers": {"openrouter": {"base_url": "x", "key_env": "K", "free": True,
+                                        "require_model_suffix": ":free"}},
+           "roles": {"rank": [{"provider": "openrouter", "model": "anthropic/claude-opus"}]}}
+    with pytest.raises(PaidModelConfigured, match="must end with ':free'"):
+        check_free_only(cfg)

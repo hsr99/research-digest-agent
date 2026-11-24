@@ -38,39 +38,45 @@ feeds = [
 
 # LLM providers, tried in order for each role. All speak the OpenAI chat API.
 # A provider whose key is empty in .env is skipped automatically.
-# Free model names change often: if a call 404s, check the provider's model list.
+#
+# COST GUARD: the router refuses to start unless every provider used below is marked
+# free = true, and (for OpenRouter) every model ends with the required ":free" suffix.
+# OpenRouter only bills non-":free" models, and NVIDIA NIM's free tier has no card attached,
+# so this setup cannot incur charges.
 [llm.providers.openrouter]
 base_url = "https://openrouter.ai/api/v1"
 key_env = "OPENROUTER_API_KEY"
+free = true
+require_model_suffix = ":free"
 retries = 0             # free models are often busy upstream: move to the next one instead
 
-[llm.providers.groq]
-base_url = "https://api.groq.com/openai/v1"
-key_env = "GROQ_API_KEY"
-
-[llm.providers.gemini]
-base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
-key_env = "GEMINI_API_KEY"
+[llm.providers.nvidia]
+# NVIDIA NIM free tier (build.nvidia.com): no credit card, ~40 requests/min,
+# meant for development and testing
+base_url = "https://integrate.api.nvidia.com/v1"
+key_env = "NVIDIA_API_KEY"
+free = true
 
 [llm.providers.ollama]
 base_url = "http://localhost:11434/v1"
-key_env = ""            # no key needed; skipped if Ollama isn't running
+key_env = ""            # runs on your own machine; skipped if Ollama isn't running
+free = true
 
 # "rank" = cheap, fast scoring of many items. "write" = best model for summaries.
-# Gemini is deliberately last: its free quota is reserved for another project.
+# If every rank model fails, the pipeline falls back to keyword ranking (no LLM).
 [llm.roles]
 rank = [
   { provider = "openrouter", model = "baidu/ernie-5.5-flash-preview:free" },
   { provider = "openrouter", model = "nvidia/nemotron-3.5-super-vl:free" },
   { provider = "openrouter", model = "google/gemma-4-26b-a4b-it:free" },
-  { provider = "groq", model = "llama-3.1-8b-instant" },
-  { provider = "gemini", model = "gemini-2.5-flash-lite" },
+  { provider = "nvidia", model = "google/gemma-3-12b-it" },
+  { provider = "nvidia", model = "nvidia/nemotron-3.5-lightning-30b-a3b" },
 ]
 write = [
   { provider = "openrouter", model = "nvidia/nemotron-3-ultra-550b-a55b:free" },
   { provider = "openrouter", model = "google/gemma-4-31b-it:free" },
   { provider = "openrouter", model = "nvidia/nemotron-3.5-super-vl:free" },
-  { provider = "groq", model = "llama-3.3-70b-versatile" },
+  { provider = "nvidia", model = "mistralai/mistral-large-4-1t-a52b" },
+  { provider = "nvidia", model = "nvidia/nemotron-3.5-super-vl-120b-a12b" },
   { provider = "ollama", model = "qwen2.5:3b" },
-  { provider = "gemini", model = "gemini-2.5-flash" },
 ]

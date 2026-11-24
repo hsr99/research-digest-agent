@@ -36,6 +36,26 @@ class InvalidOutput(ValueError):
     """Raised by a validator when the model's JSON has the wrong shape."""
 
 
+class PaidModelConfigured(ValueError):
+    """The config names a model that could cost money. Refuse to run at all."""
+
+
+def check_free_only(llm_cfg: dict) -> None:
+    """Fail fast if any model in any role could be billed."""
+    problems = []
+    for role, chain in llm_cfg["roles"].items():
+        for c in chain:
+            p = llm_cfg["providers"].get(c["provider"])
+            if p is None:
+                problems.append(f"{role}: unknown provider '{c['provider']}'")
+            elif p.get("free") is not True:
+                problems.append(f"{role}: provider '{c['provider']}' is not marked free = true")
+            elif (suffix := p.get("require_model_suffix")) and not c["model"].endswith(suffix):
+                problems.append(f"{role}: '{c['model']}' on {c['provider']} must end with '{suffix}'")
+    if problems:
+        raise PaidModelConfigured("refusing to run, possible paid models:\n  " + "\n  ".join(problems))
+
+
 def extract_json(text: str):
     """Parse JSON from a model reply, tolerating ```json fences and chatter around it."""
     text = text.strip()
@@ -60,6 +80,7 @@ def extract_json(text: str):
 class Router:
     def __init__(self, llm_cfg: dict, store: Store, max_retries: int = 2,
                  transport: httpx.BaseTransport | None = None, sleep: Callable = time.sleep):
+        check_free_only(llm_cfg)
         self.providers = llm_cfg["providers"]
         self.roles = llm_cfg["roles"]
         self.store = store

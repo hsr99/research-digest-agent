@@ -27,7 +27,8 @@ flowchart LR
 
 | Decision | Reason |
 |---|---|
-| **Provider-agnostic router** (`digest/llm.py`) | Gemini, Groq, OpenRouter and Ollama all speak the OpenAI chat format. Each role has an ordered list of models; on a 429 the router backs off, then fails over to the next provider. Free-tier rate limits become a non-issue. |
+| **Provider-agnostic router** (`digest/llm.py`) | OpenRouter, NVIDIA NIM and Ollama all speak the OpenAI chat format. Each role has an ordered list of models; when one is busy or down, the router moves to the next. Free-tier rate limits become a non-issue. |
+| **Free-only guard** | The router refuses to start if any configured model could be billed: every provider must be marked free, and OpenRouter models must be `:free` ones. Zero cost is enforced, not just intended. |
 | **Two model roles** | Ranking 60 candidates is high volume and low stakes, so it goes to a small, fast model. Writing 8 summaries is low volume and high stakes, so it goes to the best free model. |
 | **Validated JSON output** | Every reply is parsed and checked against the expected shape. On a bad reply the model gets one chance to fix it, then the next provider takes over. Small free models break JSON often; this makes them usable. |
 | **SQLite response cache** | Identical requests are never paid for twice, so reruns and eval experiments are free. |
@@ -52,7 +53,7 @@ Everything else (topic, sources, models and their order) lives in [`config.toml`
 ## Run it daily on GitHub
 
 1. Push this folder to a GitHub repo.
-2. Settings → Secrets and variables → Actions: add `GEMINI_API_KEY` and/or `GROQ_API_KEY`, `OPENROUTER_API_KEY`.
+2. Settings → Secrets and variables → Actions: add `OPENROUTER_API_KEY` and `NVIDIA_API_KEY`.
 3. The workflow in `.github/workflows/daily-digest.yml` runs every evening at 19:00 IST (or press **Run workflow**), runs the tests, builds the digest and commits it.
 
 ## Tests
