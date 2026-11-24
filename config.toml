@@ -1,0 +1,83 @@
+# What the digest is about. The ranker uses this as its definition of "relevant".
+[topic]
+description = """
+AI and machine learning for practitioners: new models and architectures, LLM inference
+and serving, agents and tool use, evals, training techniques, open-source releases,
+and important industry moves. Skip hype, funding-only news, and generic opinion pieces.
+"""
+lookback_hours = 48     # overlap on purpose: the "seen" store stops repeats, and a 24h window
+                        # drops stories published just before the previous run
+max_items = 8           # stories in the final digest
+max_candidates = 60     # stories sent to the LLM ranker after dedupe
+
+[sources.arxiv]
+categories = ["cs.AI", "cs.CL", "cs.LG"]
+max_results = 60
+
+[sources.hackernews]
+min_points = 40
+keywords = ["LLM", "GPT", "Claude", "Gemini", "Llama", "AI", "model", "agent",
+            "inference", "transformer", "fine-tun", "RAG", "embedding", "vLLM", "diffusion"]
+
+[sources.github]
+# owner/repo whose new releases count as news
+# (llama.cpp is left out on purpose: it tags a release on every commit)
+repos = ["vllm-project/vllm", "huggingface/transformers", "ollama/ollama",
+         "langchain-ai/langgraph", "unslothai/unsloth",
+         "modelcontextprotocol/modelcontextprotocol", "pytorch/pytorch"]
+
+[sources.rss]
+feeds = [
+  "https://huggingface.co/blog/feed.xml",
+  "https://simonwillison.net/atom/everything/",
+  "https://openai.com/news/rss.xml",
+  "https://deepmind.google/blog/rss.xml",
+  "https://www.interconnects.ai/feed",
+  "https://magazine.sebastianraschka.com/feed",
+]
+
+# LLM providers, tried in order for each role. All speak the OpenAI chat API.
+# A provider whose key is empty in .env is skipped automatically.
+# Free model names change often: if a call 404s, check the provider's model list.
+[llm.providers.openrouter]
+base_url = "https://openrouter.ai/api/v1"
+key_env = "OPENROUTER_API_KEY"
+retries = 0             # free models are often busy upstream: move to the next one instead
+
+[llm.providers.github]
+# GitHub Models: free, rate-limited, uses a GitHub token with the "Models: read" permission
+base_url = "https://models.github.ai/inference"
+key_env = "GITHUB_TOKEN"
+
+[llm.providers.groq]
+base_url = "https://api.groq.com/openai/v1"
+key_env = "GROQ_API_KEY"
+
+[llm.providers.gemini]
+base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+key_env = "GEMINI_API_KEY"
+
+[llm.providers.ollama]
+base_url = "http://localhost:11434/v1"
+key_env = ""            # no key needed; skipped if Ollama isn't running
+
+# "rank" = cheap, fast scoring of many items. "write" = best model for summaries.
+# Gemini is deliberately last: its free quota is reserved for another project.
+[llm.roles]
+rank = [
+  { provider = "openrouter", model = "baidu/ernie-5.5-flash-preview:free" },
+  { provider = "openrouter", model = "nvidia/nemotron-3.5-super-vl:free" },
+  { provider = "openrouter", model = "google/gemma-4-26b-a4b-it:free" },
+  { provider = "github", model = "openai/gpt-4.1-mini" },
+  { provider = "groq", model = "llama-3.1-8b-instant" },
+  { provider = "gemini", model = "gemini-2.5-flash-lite" },
+]
+write = [
+  { provider = "openrouter", model = "nvidia/nemotron-3-ultra-550b-a55b:free" },
+  { provider = "openrouter", model = "google/gemma-4-31b-it:free" },
+  { provider = "openrouter", model = "nvidia/nemotron-3.5-super-vl:free" },
+  { provider = "github", model = "openai/gpt-4.1" },
+  { provider = "groq", model = "llama-3.3-70b-versatile" },
+  { provider = "ollama", model = "qwen2.5:3b" },
+  { provider = "gemini", model = "gemini-2.5-flash" },
+]
