@@ -61,7 +61,9 @@ retries = 0             # free models are often busy upstream: move to the next 
 
 [llm.providers.nvidia]
 # NVIDIA NIM free tier (build.nvidia.com): no credit card, ~40 requests/min,
-# meant for development and testing
+# meant for development and testing. Not every model in its public list is enabled
+# for every account (gemma-3-12b 404'd; gemma-4-31b and glm-5.3-flash hung), so
+# only models verified with real calls are listed below.
 base_url = "https://integrate.api.nvidia.com/v1"
 key_env = "NVIDIA_API_KEY"
 free = true
@@ -78,14 +80,14 @@ rank = [
   { provider = "openrouter", model = "baidu/ernie-5.5-flash-preview:free" },
   { provider = "openrouter", model = "nvidia/nemotron-3.5-super-vl:free" },
   { provider = "openrouter", model = "google/gemma-4-26b-a4b-it:free" },
-  { provider = "nvidia", model = "google/gemma-3-12b-it" },
-  { provider = "nvidia", model = "nvidia/nemotron-3.5-lightning-30b-a3b" },
+  { provider = "nvidia", model = "minimaxai/minimax-m3.1-flash" },            # ~1s
+  { provider = "nvidia", model = "nvidia/nemotron-3.5-lightning-30b-a3b" },   # ~5s, reasoning
 ]
 write = [
   { provider = "openrouter", model = "nvidia/nemotron-3-ultra-550b-a55b:free" },
   { provider = "openrouter", model = "google/gemma-4-31b-it:free" },
   { provider = "openrouter", model = "nvidia/nemotron-3.5-super-vl:free" },
-  { provider = "nvidia", model = "mistralai/mistral-large-4-1t-a52b" },
-  { provider = "nvidia", model = "nvidia/nemotron-3.5-super-vl-120b-a12b" },
+  { provider = "nvidia", model = "nvidia/nemotron-3.5-super-vl-120b-a12b" },  # ~7s
+  { provider = "nvidia", model = "mistralai/mistral-large-4-1t-a52b" },       # strong but ~40s/call
   { provider = "ollama", model = "qwen2.5:3b" },
 ]
